@@ -685,7 +685,7 @@ def FileSaver(df, file_name, core_params):
     df.to_pickle(os.path.join(core_params["save_path"], file_name+".pkl"))
     return()
 
-def BackgroundOverTime(df, core_params, plotting_params):
+def BackgroundOverTime(df, core_params, plotting_params, save):
     """Plots the average background photon count over the course of the measurement"""
     mpl.style.use('seaborn-poster')
     fig = plt.figure(figsize=(8, 5))
@@ -741,17 +741,16 @@ class Measurement:
         enhanced_df = EnhanceDataFrame(fulltable, self.core_params)
         bindingevent_info_df = Build_df_bindingevents(enhanced_df)
         group_info_df = Build_df_groups(bindingevent_info_df, self.core_params["n_frames"])
-        FileSaver(bindingevent_info_df, "binding_event_info", self.core_params)
-        FileSaver(group_info_df, "group_info", self.core_params)
         all_first, all_center, all_last = AllPhotons(enhanced_df)
         all_center = SBR(all_center)
         edge_photons = np.concatenate([np.asarray(all_first["first_photons"]), np.asarray(all_last["last_photons"])])
         center_photons = np.asarray(all_center["center_photons"])
+        FileSaver(enhanced_df, "enhanced_df", self.core_params)
+        FileSaver(bindingevent_info_df, "binding_event_info", self.core_params)
+        FileSaver(group_info_df, "group_info", self.core_params)
+        FileSaver(all_center, "all_center_photons", self.core_params)
         t2 = time.time()
         print("Time elapsed: ", np.round(t2-t1, 2), " seconds")
-        
-
-
         self.group_info_df = group_info_df
         self.edge_photons = edge_photons
         self.center_photons = center_photons
@@ -768,6 +767,8 @@ class Measurement:
         PhotoPlot(self.edge_photons, self.center_photons, self.core_params, NumberOfGroups(self.fulltable), plotting_params["bin_width_photons"], plotting_params["fit_style_photons"], plotting_params["PhotoPlot_fit_params"], plotting_params["x_factor_photons"], save)
         #Plot localizations over time
         LocPlot(self.fulltable, self.core_params, NumberOfGroups(self.fulltable), save)
+        #Plot background localizations over time
+        BackgroundOverTime(self.fulltable, self.core_params, plotting_params, save)
         #Plot background
         BackGroundPlot(self.fulltable, self.core_params, plotting_params["binwidth_bg"], plotting_params["plot_range_bg"], save)
         #Plot signal to background ratio
