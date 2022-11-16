@@ -568,6 +568,8 @@ def two_d_gaus(x, y, sx, sy):
     
 def CalcMaxPhotonsPixel(row):
     """Calculates the photons collected over the 1x1 pixel central area of a given localization"""
+    from scipy import integrate
+    import math
     N = row["center_photons"]
     sx = row["sx"]
     sy = row["sy"]
@@ -581,7 +583,12 @@ def CalcMaxPhotonsPixel(row):
     
 def SBR(all_center):
     """Calculates the signal to background ratio by dividing the CalcMaxPhotonsPixel by the background per pixel value"""
-    pandarallel.initialize()
+    import multiprocessing
+    num_cpus = multiprocessing.cpu_count()
+    if num_cpus > 30:
+        pandarallel.initialize(nb_workers=30)
+    else:
+        pandarallel.initialize()
     all_center["peak_pixel_value"] = all_center.parallel_apply(CalcMaxPhotonsPixel, axis=1)
     #all_center["peak_pixel_value"] = all_center.swifter.apply(CalcMaxPhotonsPixel, axis=1)
     all_center["sbr"] = (all_center["peak_pixel_value"]/all_center["bg"])
