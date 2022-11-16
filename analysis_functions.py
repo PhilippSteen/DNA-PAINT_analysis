@@ -25,6 +25,8 @@ from lmfit import Model
 from lmfit.models import ExponentialModel
 from pandarallel import pandarallel
 import itertools
+from scipy.signal import savgol_filter
+import os
 
 def Import(input_path):
     """Imports clustered .hdf5 from Picasso. Requires group info."""
@@ -219,7 +221,8 @@ def PlotAllKinetics(group_info_df, plot_range, cutoff_range, bright_or_dark, bin
     ax.set_xlim(plot_range)
     ax.legend()
     if save==True:
-        plt.savefig(FigurePathFinder(core_params, bright_or_dark+"_kinetics.pdf"), bbox_inches="tight", pad_inches=0.2)
+        #plt.savefig(FigurePathFinder(core_params, bright_or_dark+"_kinetics.pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(os.path.join(core_params["save_path"], bright_or_dark+"_kinetics.pdf"), bbox_inches="tight", pad_inches=0.2)
         config = configparser.ConfigParser()
         config['params'] = {
             'Date and time': str(datetime.now()),
@@ -232,8 +235,9 @@ def PlotAllKinetics(group_info_df, plot_range, cutoff_range, bright_or_dark, bin
             'min_cutoff': min_cutoff,
             'max_cutoff': max_cutoff,
             'binwidth': binwidth,
-            'file_name': text[1]+"_kinetics.pdf"}
-        with open(FigurePathFinder(core_params, bright_or_dark+"_kinetics_params.txt"), 'w') as configfile:
+            'file_name': bright_or_dark+"_kinetics.pdf"}
+        #with open(FigurePathFinder(core_params, bright_or_dark+"_kinetics_params.txt"), 'w') as configfile:
+        with open(os.path.join(core_params["save_path"], bright_or_dark+"_kinetics_params.txt"), 'w') as configfile:
             config.write(configfile)
     plt.show()
 
@@ -307,14 +311,14 @@ def CDF_kinetics(dark):
         plt.show()
     return(tau_d)
 
-def FigurePathFinder(core_params, name): 
-    """Finds the path to save the figures in based on the input path"""
-    path = core_params["path"]
-    path_parts = path.split(".")
-    new_path = path_parts[:-1]+[name]
-    final_path = "."
-    final_path = final_path.join(new_path)
-    return(final_path)
+#def FigurePathFinder(core_params, name): 
+#    """Finds the path to save the figures in based on the input path"""
+#    path = core_params["path"]
+#    path_parts = path.split(".")
+#    new_path = path_parts[:-1]+[name]
+#    final_path = "."
+#    final_path = final_path.join(new_path)
+#    return(final_path)
 
 def NumberOfGroups(fulltable): 
     """The number of groups (picks) in the dataframe"""
@@ -349,10 +353,22 @@ def SiteDestructionAnalysis(group_info_df, path, plot, save):
     d_y = np.asarray(apparently_destroyed_sites["y"])
     g_x = np.asarray(apparently_good_sites["x"])
     g_y = np.asarray(apparently_good_sites["y"])
-    if save==True:
-        save_picks(d_x, d_y, path+"/apparently_destroyed_sites")
-        save_picks(g_x, g_y, path+"/apparently_good_sites")
+    
     ratio_of_ratios = len(apparently_destroyed_sites)/(len(apparently_good_sites)+len(apparently_destroyed_sites))
+    
+    if save==True:
+        config = configparser.ConfigParser()
+        config['params'] = {
+            'Date and time': str(datetime.now()),
+            'portion_destroyed': str(ratio_of_ratios),
+            'number_destroyed': str(len(apparently_destroyed_sites)),
+            'number_survived': str(len(apparently_good_sites)),
+            'sigma': str(result_e.params["decay"]),
+            'cutoff': str(cutter)}
+        with open(os.path.join(core_params["save_path"], "binding_site_destruction.txt"), 'w') as configfile:
+            config.write(configfile)
+        save_picks(d_x, d_y, os.path.join(path, "apparently_destroyed_sites"))
+        save_picks(g_x, g_y, os.path.join(path, "apparently_good_sites"))
     return(ratio_of_ratios)
 
 def _2gaussian(x_array, amp1,cen1,sigma1, amp2,cen2,sigma2):
@@ -446,7 +462,8 @@ def PhotoPlot(all_edge, all_center, core_params, origami_number, binwidth, fit_s
     ax.ticklabel_format(axis='y', style='', scilimits=(0,0))
     
     if save==True:
-        plt.savefig(FigurePathFinder(core_params, "photons.pdf"), bbox_inches="tight", pad_inches=0.2)
+        #plt.savefig(FigurePathFinder(core_params, "photons.pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(os.path.join(core_params["save_path"], "photons.pdf"), bbox_inches="tight", pad_inches=0.2)
         config = configparser.ConfigParser()
         config['params'] = {
             'Date and time': str(datetime.now()),
@@ -457,7 +474,8 @@ def PhotoPlot(all_edge, all_center, core_params, origami_number, binwidth, fit_s
             'origami_number': str(origami_number),
             'binwidth': binwidth,
             'file_name': "photons.pdf"}
-        with open(FigurePathFinder(core_params, "photons_params.txt"), 'w') as configfile:
+        #with open(FigurePathFinder(core_params, "photons_params.txt"), 'w') as configfile:
+        with open(os.path.join(core_params["save_path"], "photons_params.txt"), 'w') as configfile:
             config.write(configfile)
     plt.show()
     return(center)
@@ -492,16 +510,25 @@ def LocPlot(df, core_params, origami_number, save):
     plt.text(0.03, 0.97, str(origami_number*core_params["number_sbs"])+" binding sites", ha='left', va='top', fontsize = 14, transform=ax.transAxes)
     
     plt.title(core_params["plot_title"]+"\nLocalizations over time")
-    plt.xlabel("Frame number")
+    #plt.xlabel("Frame number")
+    plt.xlabel("Time (s)")
     plt.ylabel("Localizations")
     
     ax.tick_params(axis="both", direction="in")
-    ax.set_xticks(np.arange(0, 20001, step=5000))
+    ax.set_xticks(np.arange(0, core_params["n_frames"]+1, step=(core_params["n_frames"]/4)))
+    fig.canvas.draw()
+    labels = [item.get_text() for item in ax.get_xticklabels()]
+    labels = (int(x) * core_params["exposure_time"] for x in labels) #change x labels from frames to seconds
+    labels = (int(x) for x in labels)
+    ax.set_xticklabels(labels)
+    
+    ax.ticklabel_format(axis='y', style='', scilimits=(0,0))
     
     plt.legend()
     
     if save==True:
-        plt.savefig(FigurePathFinder(core_params, "frames.pdf"), bbox_inches="tight", pad_inches=0.2)
+        #plt.savefig(FigurePathFinder(core_params, "frames.pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(os.path.join(core_params["save_path"], "frames.pdf"), bbox_inches="tight", pad_inches=0.2)
         config = configparser.ConfigParser()
         config['params'] = {
             'Date and time': str(datetime.now()),
@@ -510,7 +537,8 @@ def LocPlot(df, core_params, origami_number, save):
             'n_bins': str(n_bins),
             'n_frames': str(n_frames),
             'file_name': "frames.pdf"}
-        with open(FigurePathFinder(core_params, "frames_params.txt"), 'w') as configfile:
+        #with open(FigurePathFinder(core_params, "frames_params.txt"), 'w') as configfile:
+        with open(os.path.join(core_params["save_path"], "frames_params.txt"), 'w') as configfile:
             config.write(configfile)
         
     plt.show()
@@ -547,7 +575,8 @@ def BackGroundPlot(df, core_params, binwidth, display_range, save):
     plt.legend()
     
     if save==True:
-        plt.savefig(FigurePathFinder(core_params, "background.pdf"), bbox_inches="tight", pad_inches=0.2)
+        #plt.savefig(FigurePathFinder(core_params, "background.pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(os.path.join(core_params["save_path"], "background.pdf"), bbox_inches="tight", pad_inches=0.2)
         config = configparser.ConfigParser()
         config['params'] = {
             'Date and time': str(datetime.now()),
@@ -557,7 +586,8 @@ def BackGroundPlot(df, core_params, binwidth, display_range, save):
             'n_localizations': str(number),
             'display_range': str(display_range),
             'file_name': "background.pdf"}
-        with open(FigurePathFinder(core_params, "background_params.txt"), 'w') as configfile:
+        #with open(FigurePathFinder(core_params, "background_params.txt"), 'w') as configfile:
+        with open(os.path.join(core_params["save_path"], "background_params.txt"), 'w') as configfile:
             config.write(configfile)
             
     plt.show()
@@ -568,17 +598,16 @@ def two_d_gaus(x, y, sx, sy):
     
 def CalcMaxPhotonsPixel(row):
     """Calculates the photons collected over the 1x1 pixel central area of a given localization"""
-    from scipy import integrate
+    from scipy.special import erf
     import math
     N = row["center_photons"]
     sx = row["sx"]
     sy = row["sy"]
-    ROI_size=1
-    ROI_bound = ROI_size/2
-    result = integrate.dblquad(two_d_gaus, -ROI_bound, ROI_bound, -ROI_bound, ROI_bound, args=(sx, sy))
+    bounds = 0.5
+    result = 2*math.pi*sx*sy*erf(bounds/(np.sqrt(2)*sx))*erf(bounds/(np.sqrt(2)*sy))
     entire = 2*math.pi*sx*sy
     scale_factor = N/entire
-    peak_pixel_value = scale_factor*result[0]
+    peak_pixel_value = scale_factor*result
     return(peak_pixel_value)
     
 def SBR(all_center):
@@ -618,7 +647,8 @@ def PlotSBR(all_center, core_params, binwidth, x_factor, save):
     ax.ticklabel_format(axis='y', style='', scilimits=(0,0))
     plt.legend()
     if save==True:
-        plt.savefig(FigurePathFinder(core_params, "sbr.pdf"), bbox_inches="tight", pad_inches=0.2)
+        #plt.savefig(FigurePathFinder(core_params, "sbr.pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(os.path.join(core_params["save_path"], "sbr.pdf"), bbox_inches="tight", pad_inches=0.2)
         config = configparser.ConfigParser()
         config['params'] = {
             'Date and time': str(datetime.now()),
@@ -627,7 +657,8 @@ def PlotSBR(all_center, core_params, binwidth, x_factor, save):
             'binwidth': str(binwidth),
             'n_localizations': str(number),
             'file_name': "sbr.pdf"}
-        with open(FigurePathFinder(core_params, "sbr_params.txt"), 'w') as configfile:
+        #with open(FigurePathFinder(core_params, "sbr_params.txt"), 'w') as configfile:
+        with open(os.path.join(core_params["save_path"], "sbr_params.txt"), 'w') as configfile: 
             config.write(configfile)
     plt.show()
     
@@ -649,9 +680,46 @@ def save_picks(x_coord, y_coord, file_name, pick_diameter = 1.0):
         yaml.dump(picks, f,default_flow_style=None)
 
 def FileSaver(df, file_name, core_params):
-    """Saves a dataframe to a csv file"""
-    df.to_csv(FigurePathFinder(core_params, file_name+".csv"), index = True)
+    """Saves a dataframe for later use"""
+    df.to_csv(os.path.join(core_params["save_path"], file_name+".csv"), index = True)
+    df.to_pickle(os.path.join(core_params["save_path"], file_name+".pkl"))
     return()
+
+def BackgroundOverTime(df, core_params, plotting_params):
+    """Plots the average background photon count over the course of the measurement"""
+    mpl.style.use('seaborn-poster')
+    fig = plt.figure(figsize=(8, 5))
+    fig.tight_layout()
+    plt.title(core_params["plot_title"]+"\nBackground over time")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Background photons per pixel")
+    bincolor, linecolor = GetHistColor(core_params["colorcode"])
+    df = df[df["bg"]>0]
+    number = df.shape[0]
+    diff = plotting_params["average_frames"]
+    timestep_s = int(diff*core_params["exposure_time"])
+    segments = np.arange(0, df["frame"].max(), diff)
+    xvals = segments+0.5*diff
+    xvals_seconds = xvals*core_params["exposure_time"]
+    simps = []
+    for step in segments:
+        simp = df[(df["frame"]>=step) & (df["frame"]<(step+diff))].mean()
+        simps.append(simp["bg"])
+    plt.plot(xvals_seconds, simps, color = bincolor, linewidth = 1, label = str(timestep_s)+" second average\nbackground photons")
+    yhat = savgol_filter(simps, int(0.5*len(segments)+1), 3)
+    plt.plot(xvals_seconds, yhat, color = linecolor, linewidth = 2, label = "Smoothed bg. ph.")
+    plt.legend()
+    if save==True:
+        plt.savefig(os.path.join(core_params["save_path"], "bg_time.pdf"), bbox_inches="tight", pad_inches=0.2)
+        config = configparser.ConfigParser()
+        config['params'] = {
+            'Date and time': str(datetime.now()),
+            'avg_timestep_frames': str(diff),
+            'file_name': "bg_time.pdf"}
+        with open(os.path.join(core_params["save_path"], "bg_time_params.txt"), 'w') as configfile: 
+            config.write(configfile)
+    plt.show()
+    
 
 ###############################################################################################
 ###############################################################################################
@@ -681,6 +749,9 @@ class Measurement:
         center_photons = np.asarray(all_center["center_photons"])
         t2 = time.time()
         print("Time elapsed: ", np.round(t2-t1, 2), " seconds")
+        
+
+
         self.group_info_df = group_info_df
         self.edge_photons = edge_photons
         self.center_photons = center_photons
