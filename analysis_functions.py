@@ -756,6 +756,13 @@ class Measurement:
         self.center_photons = center_photons
         self.fulltable = fulltable
         self.all_center = all_center
+
+    def SimplyImport(self, load_path):
+        self.group_info_df = pd.read_pickle(os.path.join(load_path, "group_info_df.pkl"))
+        self.edge_photons = pd.read_pickle(os.path.join(load_path, "edge_photons.pkl"))
+        self.center_photons = pd.read_pickle(os.path.join(load_path, "center_photons.pkl"))
+        self.fulltable = pd.read_pickle(os.path.join(load_path, "fulltable.pkl"))
+        self.all_center = pd.read_pickle(os.path.join(load_path, "all_center.pkl"))
         
     def Plots(self, plotting_params, save):
         print("Percentage of sites destroyed:", SiteDestructionAnalysis(self.group_info_df, self.core_params["save_path"], False, save))
