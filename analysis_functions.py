@@ -745,6 +745,7 @@ class Measurement:
         all_center = SBR(all_center)
         edge_photons = np.concatenate([np.asarray(all_first["first_photons"]), np.asarray(all_last["last_photons"])])
         center_photons = np.asarray(all_center["center_photons"])
+        FileSaver(fulltable, "unchanged_fulltable", self.core_params)
         FileSaver(enhanced_df, "enhanced_df", self.core_params)
         FileSaver(bindingevent_info_df, "binding_event_info", self.core_params)
         FileSaver(group_info_df, "group_info", self.core_params)
@@ -758,11 +759,13 @@ class Measurement:
         self.all_center = all_center
 
     def SimplyImport(self, load_path):
-        self.group_info_df = pd.read_pickle(os.path.join(load_path, "group_info_df.pkl"))
-        self.edge_photons = pd.read_pickle(os.path.join(load_path, "edge_photons.pkl"))
-        self.center_photons = pd.read_pickle(os.path.join(load_path, "center_photons.pkl"))
-        self.fulltable = pd.read_pickle(os.path.join(load_path, "fulltable.pkl"))
-        self.all_center = pd.read_pickle(os.path.join(load_path, "all_center.pkl"))
+        self.group_info_df = pd.read_pickle(os.path.join(load_path, "group_info.pkl"))
+        enhanced_df = pd.read_pickle(os.path.join(load_path, "enhanced_df.pkl"))
+        self.all_center = pd.read_pickle(os.path.join(load_path, "all_center_photons.pkl"))
+        all_first, incorrect_all_center, all_last = AllPhotons(enhanced_df)
+        self.fulltable = pd.read_pickle(os.path.join(load_path, "unchanged_fulltable.pkl"))
+        self.edge_photons = np.concatenate([np.asarray(all_first["first_photons"]), np.asarray(all_last["last_photons"])])
+        self.center_photons = np.asarray(self.all_center["center_photons"])
         
     def Plots(self, plotting_params, save):
         print("Percentage of sites destroyed:", SiteDestructionAnalysis(self.group_info_df, self.core_params["save_path"], False, save))
