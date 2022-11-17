@@ -334,9 +334,15 @@ def SiteDestructionAnalysis(group_info_df, path, plot, save):
     bin_middles = bin_edges+(0.5*binwidth)
     xvals, yvals = bin_middles[:-1], hist
     model_e = ExponentialModel()
-    params_e = model_e.make_params(amplitude=1, decay=1)
-    result_e = model_e.fit(yvals, params_e, x=xvals)
-    cutter = result_e.params["decay"].value * 4
+    params_e = model_e.make_params(amplitude=5, decay=.9)
+    try:
+        result_e = model_e.fit(yvals, params_e, x=xvals)
+        decay = result_e.params["decay"].value 
+    except:
+        print("Exponential fit did not converge, binding site destruction analysis not completed.")
+        decay = 10000
+        plt.hist(non_zero_sites["end_ratio"], bins = np.arange(min(non_zero_sites["end_ratio"]), max(non_zero_sites["end_ratio"]) + binwidth, binwidth), color = "grey")
+    cutter = decay * 4
     apparently_destroyed_sites = non_zero_sites[non_zero_sites["end_ratio"]>=cutter]
     apparently_good_sites = non_zero_sites[non_zero_sites["end_ratio"]<cutter]
 
@@ -363,7 +369,7 @@ def SiteDestructionAnalysis(group_info_df, path, plot, save):
             'portion_destroyed': str(ratio_of_ratios),
             'number_destroyed': str(len(apparently_destroyed_sites)),
             'number_survived': str(len(apparently_good_sites)),
-            'sigma': str(result_e.params["decay"]),
+            'sigma': str(decay),
             'cutoff': str(cutter)}
         with open(os.path.join(core_params["save_path"], "binding_site_destruction.txt"), 'w') as configfile:
             config.write(configfile)
