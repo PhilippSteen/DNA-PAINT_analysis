@@ -99,6 +99,7 @@ def EnhanceDataFrame(df, core_params):
     enhanced_df = pd.DataFrame(columns = df.keys())
     group_ids = df["group"].unique()
     pd.options.mode.chained_assignment = None
+    #Consider multiprocessing here
     for i in group_ids:
         group = df[df["group"] == i]
         indices, bursts, photo_bursts, binding_times, first_photons, center_photons, last_photons = DetermineBursts(group, core_params)
@@ -324,8 +325,15 @@ def NumberOfGroups(fulltable):
     """The number of groups (picks) in the dataframe"""
     return(fulltable["group"].nunique())
 
-def SiteDestructionAnalysis(group_info_df, path, plot, save): 
+def _2exponential(x, a, k1, b, k2):
+    return a*np.exp(x*k1) + b*np.exp(x*k2)
+
+def SiteDestructionAnalysis(group_info_df, core_params, which_a, save): 
     """Checks for binding sites that appear to be destroyed over the course of the measurement"""
+    mpl.style.use('seaborn-poster')
+    fig, ax = plt.subplots(1, figsize = (8, 5))
+    fig.tight_layout()
+    
     non_inf_sites = group_info_df[group_info_df["end_ratio"]!=np.inf]
     non_zero_sites = non_inf_sites[non_inf_sites["end_ratio"]>0]
     ratio_np = np.asarray(non_zero_sites["end_ratio"])
@@ -334,26 +342,25 @@ def SiteDestructionAnalysis(group_info_df, path, plot, save):
     bin_middles = bin_edges+(0.5*binwidth)
     xvals, yvals = bin_middles[:-1], hist
     model_e = ExponentialModel()
-    params_e = model_e.make_params(amplitude=5, decay=.9)
-    try:
-        result_e = model_e.fit(yvals, params_e, x=xvals)
-        decay = result_e.params["decay"].value 
-    except:
-        print("Exponential fit did not converge, binding site destruction analysis not completed.")
-        decay = 10000
-        plt.hist(non_zero_sites["end_ratio"], bins = np.arange(min(non_zero_sites["end_ratio"]), max(non_zero_sites["end_ratio"]) + binwidth, binwidth), color = "grey")
-    cutter = decay * 4
+    params_e = model_e.make_params(amplitude=1, decay=1)
+    result_e = model_e.fit(yvals, params_e, x=xvals)
+    
+    cutter = result_e.params["decay"].value * 4
+
+    if which_a=="bi":
+        popt_2exponential, pcov_2exponential = curve_fit(_2exponential, xvals, yvals, p0=[100,-0.1,200,-0.1])
+        m1 = -1/popt_2exponential[1]
+        m2 = -1/popt_2exponential[3]
+        print(popt_2exponential)
+        print("first mean = ", m1)
+        print("second mean = ", m2)
+        ax.plot(xvals, _2exponential(xvals, *popt_2exponential), color = "blue")
+        realmean = min(m1, m2)
+        cutter = realmean*4
+        print("Used bi-exponential fit")
+    
     apparently_destroyed_sites = non_zero_sites[non_zero_sites["end_ratio"]>=cutter]
     apparently_good_sites = non_zero_sites[non_zero_sites["end_ratio"]<cutter]
-
-    if plot == True:
-        mpl.style.use('seaborn-poster')
-        fig = plt.figure(figsize=(8, 8))
-        fig.tight_layout()
-        plt.hist(non_zero_sites["end_ratio"], bins = np.arange(min(non_zero_sites["end_ratio"]), max(non_zero_sites["end_ratio"]) + binwidth, binwidth), color = "grey")
-        plt.plot(xvals, result_e.best_fit, color = "black")
-        plt.axvline(x=cutter, color = "red")
-        plt.xlim([0, 2*cutter])
 
     d_x = np.asarray(apparently_destroyed_sites["x"])
     d_y = np.asarray(apparently_destroyed_sites["y"])
@@ -362,19 +369,32 @@ def SiteDestructionAnalysis(group_info_df, path, plot, save):
     
     ratio_of_ratios = len(apparently_destroyed_sites)/(len(apparently_good_sites)+len(apparently_destroyed_sites))
     
+    ax.hist(non_zero_sites["end_ratio"], bins = np.arange(min(non_zero_sites["end_ratio"]), max(non_zero_sites["end_ratio"]) + binwidth, binwidth), color = "grey")
+    ax.plot(xvals, result_e.best_fit, color = "black")
+    ax.axvline(x=cutter, color = "red", label = "Cutoff at "+str(np.round(cutter, 2)))
+    ax.set_xlim([0, 4*cutter])
+    plt.title(core_params["plot_title"]+"\nDestruction Analysis")
+    ax.set_xlabel("Ratio")
+    ax.set_ylabel("Number of binding sites")
+    ax.plot([], [], ' ', label="Sites destroyed: "+str(np.round(100*ratio_of_ratios,1))+" %")
+    ax.legend()
+    
     if save==True:
+        plt.savefig(os.path.join(core_params["save_path"], "binding_site_destruction.pdf"), bbox_inches="tight", pad_inches=0.2)
         config = configparser.ConfigParser()
         config['params'] = {
             'Date and time': str(datetime.now()),
             'portion_destroyed': str(ratio_of_ratios),
             'number_destroyed': str(len(apparently_destroyed_sites)),
             'number_survived': str(len(apparently_good_sites)),
-            'sigma': str(decay),
-            'cutoff': str(cutter)}
+            'sigma': str(cutter/4),
+            'cutoff': str(cutter),
+            'file_name': 'binding_site_destruction.pdf'}
         with open(os.path.join(core_params["save_path"], "binding_site_destruction.txt"), 'w') as configfile:
             config.write(configfile)
-        save_picks(d_x, d_y, os.path.join(path, "apparently_destroyed_sites"))
-        save_picks(g_x, g_y, os.path.join(path, "apparently_good_sites"))
+        save_picks(d_x, d_y, os.path.join(core_params["save_path"], "apparently_destroyed_sites"))
+        save_picks(g_x, g_y, os.path.join(core_params["save_path"], "apparently_good_sites"))
+    plt.show()
     return(ratio_of_ratios)
 
 def _2gaussian(x_array, amp1,cen1,sigma1, amp2,cen2,sigma2):
@@ -496,21 +516,28 @@ def LocPlot(df, core_params, origami_number, save):
     
     n, bins, patches = plt.hist(df["frame"], bins = n_bins, color = "orange", edgecolor='darkorange', linewidth=2, alpha = 0.6)
     
+    #n_sorted = sorted(n)
+    #topvals = n_sorted[-4:]
+    
     n_frames = core_params["n_frames"]
-    upto_15 = df[df["frame"]<=0.15*n_frames]
-    over_85 = df[df["frame"]>=0.85*n_frames]
-    upto_15_len = upto_15["frame"].size
-    over_85_len = over_85["frame"].size
+    upto_20 = df[df["frame"]<=0.2*n_frames]
+    over_80 = df[df["frame"]>=0.8*n_frames]
+    upto_20_len = upto_20["frame"].size
+    over_80_len = over_80["frame"].size
 
-    avg_start = upto_15_len/(0.15*n_bins)
-    avg_end = over_85_len/(0.15*n_bins)
+    avg_start = upto_20_len/(0.2*n_bins)
+    
+    #avg_max = np.mean(topvals)
+    
+    avg_end = over_80_len/(0.2*n_bins)
     
     plt.ylim([0, max(n)*1.15])
     
+    #drop = (1-avg_end/avg_start)*100
     drop = (1-avg_end/avg_start)*100
     
     plt.axhline(y = avg_start, color = "black", linewidth = 0.8)
-    plt.axhline(y = avg_end, color = "black", linewidth = 0.8, label = "Reduction: "+str(np.round(drop, 1))+"%")
+    plt.axhline(y = avg_end, color = "black", linewidth = 0.8, label = "Change: "+str(np.round(-drop, 1))+"%")
     
     ax = plt.gca()
     plt.text(0.03, 0.97, str(origami_number*core_params["number_sbs"])+" binding sites", ha='left', va='top', fontsize = 14, transform=ax.transAxes)
@@ -774,7 +801,7 @@ class Measurement:
         self.center_photons = np.asarray(self.all_center["center_photons"])
         
     def Plots(self, plotting_params, save):
-        print("Percentage of sites destroyed:", SiteDestructionAnalysis(self.group_info_df, self.core_params["save_path"], False, save))
+        print("Percentage of sites destroyed:", SiteDestructionAnalysis(self.group_info_df, self.core_params, plotting_params["exp_fit_type"], save))
         #Plot dark times
         PlotAllKinetics(self.group_info_df, plotting_params["dark_range"], plotting_params["dark_cutoff"], "dark", plotting_params["dark_binwidth"], [self.core_params["plot_title"]+"\nDark times", "Dark times (s)", "Number of binding sites"], self.core_params, save)
         #Plot bright times
