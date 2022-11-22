@@ -801,7 +801,8 @@ class Measurement:
         self.center_photons = np.asarray(self.all_center["center_photons"])
         
     def Plots(self, plotting_params, save):
-        print("Percentage of sites destroyed:", SiteDestructionAnalysis(self.group_info_df, self.core_params, plotting_params["exp_fit_type"], save))
+        if self.core_params["number_sbs"]==1:
+            print("Percentage of sites destroyed:", SiteDestructionAnalysis(self.group_info_df, self.core_params, plotting_params["exp_fit_type"], save))
         #Plot dark times
         PlotAllKinetics(self.group_info_df, plotting_params["dark_range"], plotting_params["dark_cutoff"], "dark", plotting_params["dark_binwidth"], [self.core_params["plot_title"]+"\nDark times", "Dark times (s)", "Number of binding sites"], self.core_params, save)
         #Plot bright times
