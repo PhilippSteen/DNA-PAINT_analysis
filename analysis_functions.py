@@ -4,7 +4,7 @@
 ######### Max Planck Institute of Biochemistry #########
 #########     Ludwig Maximilian University     #########
 #########                 2022                 #########
-#########################################################
+########################################################
 
 import numpy as np
 import scipy as sp
