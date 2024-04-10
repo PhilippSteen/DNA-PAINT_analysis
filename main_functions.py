@@ -3,26 +3,19 @@
 #########             Jungmann Lab             #########
 ######### Max Planck Institute of Biochemistry #########
 #########     Ludwig Maximilian University     #########
-#########                 2022                 #########
+#########                 2024                 #########
 ########################################################
 
 import numpy as np
-import scipy as sp
 import pandas as pd
-from scipy import integrate
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import yaml
-import time
-import math
 import h5py
 import configparser
 from datetime import datetime
-from scipy import stats
-from scipy.stats import norm
 from scipy.optimize import curve_fit
 from lmfit import Model
-from lmfit.models import ExponentialModel
 from pandarallel import pandarallel
 import itertools
 from scipy.signal import savgol_filter
@@ -99,7 +92,6 @@ def EnhanceDataFrame(df, core_params):
     enhanced_df = pd.DataFrame(columns = df.keys())
     group_ids = df["group"].unique()
     pd.options.mode.chained_assignment = None
-    #Consider multiprocessing here
     for i in group_ids:
         group = df[df["group"] == i]
         indices, bursts, photo_bursts, binding_times, first_photons, center_photons, last_photons = DetermineBursts(group, core_params)
@@ -118,6 +110,24 @@ def AllPhotons(enhanced_df):
     all_center = enhanced_df[enhanced_df["center_photons"] >-1]
     all_last = enhanced_df[enhanced_df["last_photons"] >-1]
     return(all_first, all_center, all_last)
+
+def Build_df_center_frames_only(enhanced_df):
+    """Builds dataframe with center frames only"""
+    center_only = enhanced_df[enhanced_df["center_photons"] > 0]
+    return(center_only)
+
+def PicassoSaveHdf5(center_only, core_params):
+    df = center_only.astype(np.float64)
+    df['frame'] = df['frame'].astype(int)
+    df['group'] = df['group'].astype(int)
+    labels = list(df.keys())
+    df_picasso = df.reindex(columns=labels, fill_value=1)
+    df_picasso = df_picasso.reset_index()
+    df_picasso = df_picasso.drop(columns=['index'])
+    locs = df_picasso.to_records(index = False)
+    hf = h5py.File(core_params["save_path"] + "/center_f_only", 'w')
+    hf.create_dataset('locs', data=locs)
+    hf.close()
 
 def Build_df_bindingevents(enhanced_df): 
     """Builds dataframe with bright and dark times for each group and binding event"""
@@ -168,8 +178,6 @@ def MeanMedian(ax, darks_mean, darks_fit, bright_or_dark, colors):
     darks_mean_median = np.median(darks_mean)
     darks_fit_mean = np.mean(darks_fit)
     darks_fit_median = np.median(darks_fit)
-    #ax.axvline(x=darks_mean_mean, color = "red", label = "mean mean: t = "+str(round(darks_mean_mean,2)))
-    #ax.axvline(x=darks_mean_median, color = "orange", label = "mean median: t = "+str(round(darks_mean_median,2)))
     ax.axvline(x=darks_fit_mean, color = colors[1], label = r"$\tau_{"+bright_or_dark+", mean}$ = "+str(round(darks_fit_mean,2))+" s")
     ax.axvline(x=darks_fit_median, color = colors[2], label = r"$\tau_{"+bright_or_dark+", median}$ = "+str(round(darks_fit_median,2))+" s")
     return(darks_mean_mean, darks_mean_median, darks_fit_mean, darks_fit_median)
@@ -207,23 +215,15 @@ def PlotAllKinetics(group_info_df, plot_range, cutoff_range, bright_or_dark, bin
         text = str(len(filter_fit)*core_params["number_sbs"])+" binding sites\n"+str(len(filter_fit))+" DNA origami"
     elif core_params["number_sbs"] == 1:
         text = str(len(filter_fit))+" binding sites"
-    
-    #if bright_or_dark == "dark":
-    #    plt.text(0.03, 0.97, text, ha='left', va='top', fontsize = 14, transform=ax.transAxes)
-    #elif bright_or_dark == "bright":
-    #    plt.text(0.03, 0.03, text, ha='left', va='bottom', fontsize = 14, transform=ax.transAxes)
     plt.text(0.03, 0.03, text, ha='left', va='bottom', fontsize = 14, transform=ax.transAxes)
-    
     darks_mean_mean, darks_mean_median, darks_fit_mean, darks_fit_median = MeanMedian(ax, filter_mean, filter_fit, bright_or_dark, colors)
-    #ax.hist(filter_mean, bins = np.arange(0, max(filter_mean) + binwidth, binwidth), alpha = 0.5, color = "red", label = "mean, datapoints: "+str(len(filter_mean))+"\nSTD = "+str(np.round(filter_mean_std, 2)))
-    #ax.hist(filter_fit, bins = np.arange(0, max(filter_fit) + binwidth, binwidth), alpha = 0.3, color = "blue", label = "CDF fit, datapoints: "+str(len(filter_fit))+"\nSTD = "+str(np.round(filter_fit_std, 2)))
     entries, bins, patches = ax.hist(filter_fit, bins = np.arange(0, max(filter_fit) + binwidth, binwidth), alpha = 0.5, color = colors[0], edgecolor=colors[1], linewidth=1, label = "Mean "+bright_or_dark+" times\nSTD = "+str(np.round(filter_fit_std, 3))+" s")
     plt.ylim([0, max(entries)*1.1])
     ax.set_xlim(plot_range)
+
     ax.legend()
     if save==True:
-        #plt.savefig(FigurePathFinder(core_params, bright_or_dark+"_kinetics.pdf"), bbox_inches="tight", pad_inches=0.2)
-        plt.savefig(os.path.join(core_params["save_path"], bright_or_dark+"_kinetics.pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(os.path.join(core_params["save_path"], core_params["save_code"]+"_"+bright_or_dark+"_kinetics.pdf"), bbox_inches="tight", pad_inches=0.2)
         config = configparser.ConfigParser()
         config['params'] = {
             'Date and time': str(datetime.now()),
@@ -237,8 +237,7 @@ def PlotAllKinetics(group_info_df, plot_range, cutoff_range, bright_or_dark, bin
             'max_cutoff': max_cutoff,
             'binwidth': binwidth,
             'file_name': bright_or_dark+"_kinetics.pdf"}
-        #with open(FigurePathFinder(core_params, bright_or_dark+"_kinetics_params.txt"), 'w') as configfile:
-        with open(os.path.join(core_params["save_path"], bright_or_dark+"_kinetics_params.txt"), 'w') as configfile:
+        with open(os.path.join(core_params["save_path"], core_params["save_code"]+"_"+bright_or_dark+"_kinetics_params.txt"), 'w') as configfile:
             config.write(configfile)
     plt.show()
 
@@ -295,8 +294,6 @@ def CDF_kinetics(dark):
     if len(dark) >= 2:
         dark_sorted = np.sort(dark)
         p = 1. * np.arange(len(dark_sorted)) / (len(dark_sorted) - 1)
-        #popt, pcov = curve_fit(expfunc, dark_sorted, p)
-        
         d_model = Model(expfunc)
         try:
             d_result = d_model.fit(p, t=dark_sorted, tau=200)
@@ -312,111 +309,58 @@ def CDF_kinetics(dark):
         plt.show()
     return(tau_d)
 
-#def FigurePathFinder(core_params, name): 
-#    """Finds the path to save the figures in based on the input path"""
-#    path = core_params["path"]
-#    path_parts = path.split(".")
-#    new_path = path_parts[:-1]+[name]
-#    final_path = "."
-#    final_path = final_path.join(new_path)
-#    return(final_path)
-
 def NumberOfGroups(fulltable): 
     """The number of groups (picks) in the dataframe"""
     return(fulltable["group"].nunique())
 
-def _2exponential(x, a, k1, b, k2):
-    return a*np.exp(x*k1) + b*np.exp(x*k2)
+def expfunc1(x,a1,m1):
+    return a1*np.exp(-x*(1/m1))
 
-def SiteDestructionAnalysis(group_info_df, core_params, which_a, save): 
-    """Checks for binding sites that appear to be destroyed over the course of the measurement"""
-    mpl.style.use('seaborn-poster')
-    fig, ax = plt.subplots(1, figsize = (8, 5))
-    fig.tight_layout()
-    
+def expfunc2(x, a1, m1, a2, m2):
+    return a1*np.exp(-x*(1/m1)) + a2*np.exp(-x*(1/m2))
+
+def ImprovedSiteDestruction(group_info_df, core_params, which_a, save):
     non_inf_sites = group_info_df[group_info_df["end_ratio"]!=np.inf]
     non_zero_sites = non_inf_sites[non_inf_sites["end_ratio"]>0]
-    ratio_np = np.asarray(non_zero_sites["end_ratio"])
-    binwidth=1
+    binwidth=0.5
     hist, bin_edges = np.histogram(non_zero_sites["end_ratio"], bins = np.arange(min(non_zero_sites["end_ratio"]), max(non_zero_sites["end_ratio"]) + binwidth, binwidth))
     bin_middles = bin_edges+(0.5*binwidth)
     xvals, yvals = bin_middles[:-1], hist
-    model_e = ExponentialModel()
-    params_e = model_e.make_params(amplitude=1, decay=1)
-    result_e = model_e.fit(yvals, params_e, x=xvals)
-    
-    cutter = result_e.params["decay"].value * 4
 
-    if which_a=="bi":
-        popt_2exponential, pcov_2exponential = curve_fit(_2exponential, xvals, yvals, p0=[100,-0.1,200,-0.1])
-        m1 = -1/popt_2exponential[1]
-        m2 = -1/popt_2exponential[3]
-        print(popt_2exponential)
-        print("first mean = ", m1)
-        print("second mean = ", m2)
-        ax.plot(xvals, _2exponential(xvals, *popt_2exponential), color = "blue")
-        realmean = min(m1, m2)
-        cutter = realmean*4
-        print("Used bi-exponential fit")
-    
+    popt_1e, pcov_1e = curve_fit(expfunc1, xvals, yvals, p0=[100, 1])
+    natural_portion_over_four_m_1e = ((popt_1e[0]*max(popt_1e[1], 1))/np.exp(4))/(popt_1e[0]*popt_1e[1])
+    cutter = 4*max(popt_1e[1], 1)
     apparently_destroyed_sites = non_zero_sites[non_zero_sites["end_ratio"]>=cutter]
     apparently_good_sites = non_zero_sites[non_zero_sites["end_ratio"]<cutter]
-
-    d_x = np.asarray(apparently_destroyed_sites["x"])
-    d_y = np.asarray(apparently_destroyed_sites["y"])
-    g_x = np.asarray(apparently_good_sites["x"])
-    g_y = np.asarray(apparently_good_sites["y"])
-    
     ratio_of_ratios = len(apparently_destroyed_sites)/(len(apparently_good_sites)+len(apparently_destroyed_sites))
-    
-    ax.hist(non_zero_sites["end_ratio"], bins = np.arange(min(non_zero_sites["end_ratio"]), max(non_zero_sites["end_ratio"]) + binwidth, binwidth), color = "grey")
-    ax.plot(xvals, result_e.best_fit, color = "black")
-    ax.axvline(x=cutter, color = "red", label = "Cutoff at "+str(np.round(cutter, 2)))
-    ax.set_xlim([0, 4*cutter])
-    plt.title(core_params["plot_title"]+"\nDestruction Analysis")
-    ax.set_xlabel("Ratio")
-    ax.set_ylabel("Number of binding sites")
-    ax.plot([], [], ' ', label="Sites destroyed: "+str(np.round(100*ratio_of_ratios,1))+" %")
-    ax.legend()
-    
+    final_ratio = ratio_of_ratios-natural_portion_over_four_m_1e
+
+    print("sigma is ", popt_1e[1], "\n sigma used ", max(popt_1e[1], 1))
+    print("portion of integral over 4 sigma ", natural_portion_over_four_m_1e, "\n ratio of destroyed sites without correction ", ratio_of_ratios, "\n ratio of destroyed sites with correction", final_ratio)
+    mpl.style.use('seaborn-poster')
+    fig, ax = plt.subplots(1, figsize = (8, 5))
+    fig.tight_layout()
+
+    binwidth_display = 0.5
+    n, bins, patches = ax.hist(non_zero_sites["end_ratio"], bins = np.arange(min(non_zero_sites["end_ratio"]), max(non_zero_sites["end_ratio"]) + binwidth_display, binwidth_display), color = "grey")
+    ax.plot(xvals, expfunc1(xvals, *popt_1e), color = "black", linewidth = 0.5)
+
+    ax.set_xlim([0, 10])
+
     if save==True:
-        plt.savefig(os.path.join(core_params["save_path"], "binding_site_destruction.pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(os.path.join(core_params["save_path"], core_params["save_code"]+"_binding_site_destruction_new.pdf"), bbox_inches="tight", pad_inches=0.2)
         config = configparser.ConfigParser()
         config['params'] = {
             'Date and time': str(datetime.now()),
-            'portion_destroyed': str(ratio_of_ratios),
-            'number_destroyed': str(len(apparently_destroyed_sites)),
-            'number_survived': str(len(apparently_good_sites)),
-            'sigma': str(cutter/4),
-            'cutoff': str(cutter),
-            'file_name': 'binding_site_destruction.pdf'}
-        with open(os.path.join(core_params["save_path"], "binding_site_destruction.txt"), 'w') as configfile:
+            'sigma_used_1fit': str(cutter/4),
+            "portion of integral over 4 sigma ":  str(natural_portion_over_four_m_1e),
+            "ratio of destroyed sites without correction ":  str(ratio_of_ratios),
+            "ratio of destroyed sites with correction":  str(final_ratio),
+            'file_name': '_binding_site_destruction_new.pdf'}
+        with open(os.path.join(core_params["save_path"], core_params["save_code"]+"_binding_site_destruction_new.txt"), 'w') as configfile:
             config.write(configfile)
-        save_picks(d_x, d_y, os.path.join(core_params["save_path"], "apparently_destroyed_sites"))
-        save_picks(g_x, g_y, os.path.join(core_params["save_path"], "apparently_good_sites"))
     plt.show()
-    return(ratio_of_ratios)
-
-def _2gaussian(x_array, amp1,cen1,sigma1, amp2,cen2,sigma2):
-    """Double Gaussian for fitting"""
-    return amp1*(1/(sigma1*(np.sqrt(2*np.pi))))*(np.exp((-1.0/2.0)*(((x_array-cen1)/sigma1)**2))) + \
-            amp2*(1/(sigma2*(np.sqrt(2*np.pi))))*(np.exp((-1.0/2.0)*(((x_array-cen2)/sigma2)**2)))
-
-def _1gaussian(x_array, amp1,cen1,sigma1):
-    """Gaussian for fitting"""
-    return amp1*(1/(sigma1*(np.sqrt(2*np.pi))))*(np.exp((-1.0/2.0)*(((x_array-cen1)/sigma1)**2)))
-
-def StrangeFit(bin_middles, center_entries, xax, p0, linecolor):
-    """Performs double Gaussian fitting"""
-    popt_2gauss, pcov_2gauss = sp.optimize.curve_fit(_2gaussian, bin_middles, center_entries, p0=p0)
-    perr_2gauss = np.sqrt(np.diag(pcov_2gauss))
-    pars_1 = popt_2gauss[0:3]
-    pars_2 = popt_2gauss[3:6]
-    gauss_peak_1 = _1gaussian(xax, *pars_1)
-    gauss_peak_2 = _1gaussian(xax, *pars_2)
-    plt.plot(xax, gauss_peak_1, linecolor, linewidth = 0.8, label = "Mean photons (1):\n"+str(int(np.round(pars_1[1]))))
-    plt.plot(xax, gauss_peak_2, linecolor, linewidth = 0.8, label = "Mean photons (2):\n"+str(int(np.round(pars_2[1]))))
-    return(pars_2)
+    return(fig, ax)
 
 def GetHistColor(colorcode):
     """Defines the color of the photon histogram"""
@@ -434,77 +378,27 @@ def GetHistColor(colorcode):
         linecolor = "black"
     return(bincolor, linecolor)
 
-def PhotoPlot(all_edge, all_center, core_params, origami_number, binwidth, fit_style, p0, x_factor, save):
-    """Plots the photon count histogram"""
-    all_edge = np.asarray(all_edge)
+def SimplePhotons(all_center, core_params, n_bins, x_factor, save):
     all_center = np.asarray(all_center)
+    center_mean = np.mean(all_center)
+    display_width = int(x_factor*center_mean)
+    binwidth = int(display_width/n_bins)
+    bins=range(0, display_width + binwidth, binwidth)
+    bincolor, linecolor = GetHistColor(core_params["colorcode"])
     
     mpl.style.use('seaborn-poster')
-    bins=range(int(all_edge.min()), int(all_center.max()) + binwidth, binwidth)
-    fig = plt.figure(figsize=(8, 8))
+    fig, ax = plt.subplots(1, figsize = (8, 8))
     fig.tight_layout()
-    
-    bincolor, linecolor = GetHistColor(core_params["colorcode"])
-
-    edge_entries, edge_bins, edge_patches = plt.hist(all_edge, bins=bins, density=True, color = "grey", edgecolor='black', linewidth=1, alpha = 0.3, label = "First / last frame,\nN$_{loc}$="+str(len(all_edge)))
-
-    center_entries, center_bins, center_patches = plt.hist(all_center, bins=bins, density=True, color = bincolor, edgecolor=linecolor, linewidth=1, alpha = 0.6, label = "\"Center\" frame(s),\nN$_{loc}$="+str(len(all_center)))
-    
-    bin_middles = 0.5 * (center_bins[1:] + center_bins[:-1])
-
-    xax = np.linspace(0, max(all_center)+1000, 10000)
-
-    if fit_style == "double":
-        pars = StrangeFit(bin_middles, center_entries, xax, p0, linecolor)
-        center = pars[1]
-    elif fit_style == "single":
-        popt1, pcov1 = sp.optimize.curve_fit(_1gaussian, bin_middles, center_entries, p0=p0[3:6])
-        gauss_peak_3 = _1gaussian(xax, *popt1)
-        center = popt1[1]
-        plt.plot(xax, gauss_peak_3, linecolor, linewidth = 0.8, label = "Mean photons:\n"+str(int(np.round(center))))
-    else:
-        print("fit type not specified")
-        return()
-
-    ax = plt.gca()
+    entries, bins, patches = ax.hist(all_center, bins=bins, density=True, color = bincolor, edgecolor=linecolor, linewidth=1, alpha = 0.6, label = "Mean photons:\n"+str(int(np.round(center_mean))))
     ax.tick_params(axis="both", direction="in")
-    plt.text(0.03, 0.97, str(origami_number*core_params["number_sbs"])+" binding sites", ha='left', va='top', fontsize = 14, transform=ax.transAxes)
-    
-    #Add labels in preferred order
-    handles, labels = plt.gca().get_legend_handles_labels()
-    
-    if fit_style == "double":
-        order = [2,3,0,1]
-        plt.legend([handles[idx] for idx in order],[labels[idx] for idx in order]) 
-    elif fit_style == "single":
-        order = [1,2,0]
-        plt.legend([handles[idx] for idx in order],[labels[idx] for idx in order]) 
+    ax.set_xbound(0,display_width)
 
-    plt.title(core_params["plot_title"]+"\nPhoton counts")
-    plt.xlim([0, x_factor*center])
-    plt.ylim([0, max(max(center_entries), max(edge_entries))*1.15])
-    plt.xlabel("Photons per localization-frame")
-    plt.ylabel("Normalized counts")
-    ax.ticklabel_format(axis='y', style='', scilimits=(0,0))
-    
+    ax.legend()
+
     if save==True:
-        #plt.savefig(FigurePathFinder(core_params, "photons.pdf"), bbox_inches="tight", pad_inches=0.2)
-        plt.savefig(os.path.join(core_params["save_path"], "photons.pdf"), bbox_inches="tight", pad_inches=0.2)
-        config = configparser.ConfigParser()
-        config['params'] = {
-            'Date and time': str(datetime.now()),
-            'fit_used': fit_style,
-            'fit_mean': str(center),
-            'number_center_frames': str(len(all_center)),
-            'number_edge_frames': str(len(all_edge)),
-            'origami_number': str(origami_number),
-            'binwidth': binwidth,
-            'file_name': "photons.pdf"}
-        #with open(FigurePathFinder(core_params, "photons_params.txt"), 'w') as configfile:
-        with open(os.path.join(core_params["save_path"], "photons_params.txt"), 'w') as configfile:
-            config.write(configfile)
-    plt.show()
-    return(center)
+        plt.savefig(os.path.join(core_params["save_path"], core_params["save_code"]+"_photons_clean.pdf"), bbox_inches="tight", pad_inches=0.2)
+    
+    return(center_mean)
 
 def LocPlot(df, core_params, origami_number, save):
     """Plots localizations over time"""
@@ -515,25 +409,19 @@ def LocPlot(df, core_params, origami_number, save):
     n_bins = 20
     
     n, bins, patches = plt.hist(df["frame"], bins = n_bins, color = "orange", edgecolor='darkorange', linewidth=2, alpha = 0.6)
-    
-    #n_sorted = sorted(n)
-    #topvals = n_sorted[-4:]
-    
-    n_frames = core_params["n_frames"]
+
+    n_frames = max(core_params["n_frames"], float(df["frame"].max()+1))
     upto_20 = df[df["frame"]<=0.2*n_frames]
     over_80 = df[df["frame"]>=0.8*n_frames]
     upto_20_len = upto_20["frame"].size
     over_80_len = over_80["frame"].size
 
     avg_start = upto_20_len/(0.2*n_bins)
-    
-    #avg_max = np.mean(topvals)
-    
+
     avg_end = over_80_len/(0.2*n_bins)
     
     plt.ylim([0, max(n)*1.15])
-    
-    #drop = (1-avg_end/avg_start)*100
+
     drop = (1-avg_end/avg_start)*100
     
     plt.axhline(y = avg_start, color = "black", linewidth = 0.8)
@@ -543,25 +431,24 @@ def LocPlot(df, core_params, origami_number, save):
     plt.text(0.03, 0.97, str(origami_number*core_params["number_sbs"])+" binding sites", ha='left', va='top', fontsize = 14, transform=ax.transAxes)
     
     plt.title(core_params["plot_title"]+"\nLocalizations over time")
-    #plt.xlabel("Frame number")
-    plt.xlabel("Time (s)")
+    #plt.xlabel("Time (s)")
     plt.ylabel("Localizations")
     
     ax.tick_params(axis="both", direction="in")
     ax.set_xticks(np.arange(0, core_params["n_frames"]+1, step=(core_params["n_frames"]/4)))
-    fig.canvas.draw()
-    labels = [item.get_text() for item in ax.get_xticklabels()]
-    labels = (int(x) * core_params["exposure_time"] for x in labels) #change x labels from frames to seconds
-    labels = (int(x) for x in labels)
-    ax.set_xticklabels(labels)
+    #fig.canvas.draw()
+    #labels = [item.get_text() for item in ax.get_xticklabels()]
+    #labels = (int(x) * core_params["exposure_time"] for x in labels) #change x labels from frames to seconds
+    #labels = (int(x) for x in labels)
+    #ax.set_xticklabels(labels)
+    plt.xlabel("Frames")
     
     ax.ticklabel_format(axis='y', style='', scilimits=(0,0))
     
     plt.legend()
     
     if save==True:
-        #plt.savefig(FigurePathFinder(core_params, "frames.pdf"), bbox_inches="tight", pad_inches=0.2)
-        plt.savefig(os.path.join(core_params["save_path"], "frames.pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(os.path.join(core_params["save_path"], core_params["save_code"]+"_frames.pdf"), bbox_inches="tight", pad_inches=0.2)
         config = configparser.ConfigParser()
         config['params'] = {
             'Date and time': str(datetime.now()),
@@ -570,11 +457,101 @@ def LocPlot(df, core_params, origami_number, save):
             'n_bins': str(n_bins),
             'n_frames': str(n_frames),
             'file_name': "frames.pdf"}
-        #with open(FigurePathFinder(core_params, "frames_params.txt"), 'w') as configfile:
-        with open(os.path.join(core_params["save_path"], "frames_params.txt"), 'w') as configfile:
+        with open(os.path.join(core_params["save_path"], core_params["save_code"]+"_frames_params.txt"), 'w') as configfile:
             config.write(configfile)
         
     plt.show()
+
+def SogSegments(segments):
+    seg1 = int(0.5*len(segments)+1)
+    if (seg1%2) == 0:
+        seg1 = int(0.5*len(segments))
+    return(seg1)
+    
+def LocPlot2(df, core_params, plotting_params, origami_number, save):
+    """Plots localizations over time"""
+    mpl.style.use('seaborn-poster')
+    fig = plt.figure(figsize=(8, 5))
+    fig.tight_layout()
+    plt.title(core_params["plot_title"]+"\nLocalizations over time")
+    df = df[df["frame"]>0]
+    diff = 200
+    timestep_s = int(diff*core_params["exposure_time"])
+    segments = np.arange(0, df["frame"].max(), diff)
+    xvals = segments+0.5*diff
+    xvals_seconds = xvals*core_params["exposure_time"]
+    simps = []
+    for step in segments:
+        simp = df[(df["frame"]>=step) & (df["frame"]<(step+diff))]
+        simpl = len(simp)
+        simps.append(simpl)
+    plt.plot(xvals_seconds, simps, color = "orange", linewidth = 1, label = "Number of localizations\nper "+str(timestep_s)+" seconds")
+    plt.ylim(0,max(simps)+0.1*max(simps))
+    
+    seg1 = SogSegments(segments)    
+    yhat = savgol_filter(simps, seg1, 3)
+    plt.plot(xvals_seconds, yhat, color = "orange", linewidth = 2, label = "Smoothed n. loc.")
+    ax = plt.gca()
+    ax.ticklabel_format(axis='y', style='', scilimits=(0,0))
+    plt.text(0.03, 0.97, str(origami_number*core_params["number_sbs"])+" binding sites", ha='left', va='top', fontsize = 14, transform=ax.transAxes)
+    plt.xlabel("Time (s)")
+    plt.ylabel("Localizations per "+str(timestep_s)+" seconds")
+    
+    ##### Analysis part #####
+    
+    len_of_parts = int(len(segments) * 0.15) #15% of locs for first / last segment
+    
+    first_part = simps[:len_of_parts]
+    first_mean = np.mean(first_part)
+    
+    windows = np.convolve(simps,np.ones(len_of_parts,dtype=int),'valid')
+    max_window = np.argmax(windows)
+    biggest_part = simps[max_window:max_window+len_of_parts]
+    biggest_mean = np.mean(biggest_part)
+    
+    last_part = simps[-len_of_parts:]
+    last_mean = np.mean(last_part)
+    
+    plt.axvspan((max_window)*timestep_s, (max_window+len_of_parts)*timestep_s, alpha=0.05, color='red', label = "15% of measurement with\nmax. number of localizations")
+    
+    if (first_mean>last_mean): prefac=-1 
+    else: prefac=1
+    start_to_end = (1-(min(first_mean, last_mean) / max(first_mean, last_mean))) * prefac
+    if (biggest_mean>last_mean): prefac=-1 
+    else: prefac=1
+    max_to_end = (1-(min(biggest_mean, last_mean) / max(biggest_mean, last_mean))) * prefac
+    prefac=1
+    start_to_max = (1-(min(first_mean, biggest_mean) / max(first_mean, biggest_mean))) * prefac
+    
+    start_to_end *=100
+    max_to_end *=100
+    start_to_max *=100
+    
+    print("change from start to end: \t", start_to_end)
+    print("change from maximum to end: \t", max_to_end)
+    print("change from start to maximum: \t", start_to_max)
+    
+    plt.plot([], [], ' ', label="Change from max. to end: "+str(np.round(max_to_end, 1))+"%")
+    
+    plt.legend()
+    if save==True:
+        plt.savefig(os.path.join(core_params["save_path"], core_params["save_code"]+"_frames_n.pdf"), bbox_inches="tight", pad_inches=0.2)
+        config = configparser.ConfigParser()
+        config['params'] = {
+            'Date and time': str(datetime.now()),
+            'avg_start': str(first_mean),
+            'avg_max': str(biggest_mean),
+            'avg_end': str(last_mean),
+            'start_of_max_part': str((max_window)*timestep_s),
+            'change_from_start_to_end': str(start_to_end),
+            'change_from_maximum_to_end': str(max_to_end),
+            'change_from_start_to_maximum': str(start_to_max),
+            'segment_length_seconds': str(timestep_s),
+            'file_name': "frames_n.pdf"}
+        with open(os.path.join(core_params["save_path"], core_params["save_code"]+"_frames_n_params.txt"), 'w') as configfile:
+            config.write(configfile)
+    plt.show()
+    
     
 def BackGroundPlot(df, core_params, binwidth, display_range, save):
     """Plots the background photon count"""
@@ -608,8 +585,7 @@ def BackGroundPlot(df, core_params, binwidth, display_range, save):
     plt.legend()
     
     if save==True:
-        #plt.savefig(FigurePathFinder(core_params, "background.pdf"), bbox_inches="tight", pad_inches=0.2)
-        plt.savefig(os.path.join(core_params["save_path"], "background.pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(os.path.join(core_params["save_path"], core_params["save_code"]+"_background.pdf"), bbox_inches="tight", pad_inches=0.2)
         config = configparser.ConfigParser()
         config['params'] = {
             'Date and time': str(datetime.now()),
@@ -619,8 +595,7 @@ def BackGroundPlot(df, core_params, binwidth, display_range, save):
             'n_localizations': str(number),
             'display_range': str(display_range),
             'file_name': "background.pdf"}
-        #with open(FigurePathFinder(core_params, "background_params.txt"), 'w') as configfile:
-        with open(os.path.join(core_params["save_path"], "background_params.txt"), 'w') as configfile:
+        with open(os.path.join(core_params["save_path"], core_params["save_code"]+"_background_params.txt"), 'w') as configfile:
             config.write(configfile)
             
     plt.show()
@@ -652,7 +627,6 @@ def SBR(all_center):
     else:
         pandarallel.initialize()
     all_center["peak_pixel_value"] = all_center.parallel_apply(CalcMaxPhotonsPixel, axis=1)
-    #all_center["peak_pixel_value"] = all_center.swifter.apply(CalcMaxPhotonsPixel, axis=1)
     all_center["sbr"] = (all_center["peak_pixel_value"]/all_center["bg"])
     return(all_center)
 
@@ -680,8 +654,7 @@ def PlotSBR(all_center, core_params, binwidth, x_factor, save):
     ax.ticklabel_format(axis='y', style='', scilimits=(0,0))
     plt.legend()
     if save==True:
-        #plt.savefig(FigurePathFinder(core_params, "sbr.pdf"), bbox_inches="tight", pad_inches=0.2)
-        plt.savefig(os.path.join(core_params["save_path"], "sbr.pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(os.path.join(core_params["save_path"], core_params["save_code"]+"_sbr.pdf"), bbox_inches="tight", pad_inches=0.2)
         config = configparser.ConfigParser()
         config['params'] = {
             'Date and time': str(datetime.now()),
@@ -690,8 +663,7 @@ def PlotSBR(all_center, core_params, binwidth, x_factor, save):
             'binwidth': str(binwidth),
             'n_localizations': str(number),
             'file_name': "sbr.pdf"}
-        #with open(FigurePathFinder(core_params, "sbr_params.txt"), 'w') as configfile:
-        with open(os.path.join(core_params["save_path"], "sbr_params.txt"), 'w') as configfile: 
+        with open(os.path.join(core_params["save_path"], core_params["save_code"]+"_sbr_params.txt"), 'w') as configfile: 
             config.write(configfile)
     plt.show()
     
@@ -714,109 +686,6 @@ def save_picks(x_coord, y_coord, file_name, pick_diameter = 1.0):
 
 def FileSaver(df, file_name, core_params):
     """Saves a dataframe for later use"""
-    df.to_csv(os.path.join(core_params["save_path"], file_name+".csv"), index = True)
-    df.to_pickle(os.path.join(core_params["save_path"], file_name+".pkl"))
+    df.to_csv(os.path.join(core_params["save_path"], core_params["save_code"]+file_name+".csv"), index = True)
+    df.to_pickle(os.path.join(core_params["save_path"], core_params["save_code"]+file_name+".pkl"))
     return()
-
-def BackgroundOverTime(df, core_params, plotting_params, save):
-    """Plots the average background photon count over the course of the measurement"""
-    mpl.style.use('seaborn-poster')
-    fig = plt.figure(figsize=(8, 5))
-    fig.tight_layout()
-    plt.title(core_params["plot_title"]+"\nBackground over time")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Background photons per pixel")
-    bincolor, linecolor = GetHistColor(core_params["colorcode"])
-    df = df[df["bg"]>0]
-    number = df.shape[0]
-    diff = plotting_params["average_frames"]
-    timestep_s = int(diff*core_params["exposure_time"])
-    segments = np.arange(0, df["frame"].max(), diff)
-    xvals = segments+0.5*diff
-    xvals_seconds = xvals*core_params["exposure_time"]
-    simps = []
-    for step in segments:
-        simp = df[(df["frame"]>=step) & (df["frame"]<(step+diff))].mean()
-        simps.append(simp["bg"])
-    plt.plot(xvals_seconds, simps, color = bincolor, linewidth = 1, label = str(timestep_s)+" second average\nbackground photons")
-    yhat = savgol_filter(simps, int(0.5*len(segments)+1), 3)
-    plt.plot(xvals_seconds, yhat, color = linecolor, linewidth = 2, label = "Smoothed bg. ph.")
-    plt.legend()
-    if save==True:
-        plt.savefig(os.path.join(core_params["save_path"], "bg_time.pdf"), bbox_inches="tight", pad_inches=0.2)
-        config = configparser.ConfigParser()
-        config['params'] = {
-            'Date and time': str(datetime.now()),
-            'avg_timestep_frames': str(diff),
-            'file_name': "bg_time.pdf"}
-        with open(os.path.join(core_params["save_path"], "bg_time_params.txt"), 'w') as configfile: 
-            config.write(configfile)
-    plt.show()
-    
-
-###############################################################################################
-###############################################################################################
-###############################################################################################
-
-class Measurement:
-    def __init__(self,
-                 core_params = []):
-        self.core_params = core_params
-        self.group_info_df = []
-        self.edge_photons = []
-        self.center_photons = []
-        self.fulltable = []
-        self.all_center = []
-    
-    def HeavyCalcs(self):
-        t1 = time.time()
-        fulltable = Import(self.core_params["path"])
-        enhanced_df = EnhanceDataFrame(fulltable, self.core_params)
-        bindingevent_info_df = Build_df_bindingevents(enhanced_df)
-        group_info_df = Build_df_groups(bindingevent_info_df, self.core_params["n_frames"])
-        all_first, all_center, all_last = AllPhotons(enhanced_df)
-        all_center = SBR(all_center)
-        edge_photons = np.concatenate([np.asarray(all_first["first_photons"]), np.asarray(all_last["last_photons"])])
-        center_photons = np.asarray(all_center["center_photons"])
-        FileSaver(fulltable, "unchanged_fulltable", self.core_params)
-        FileSaver(enhanced_df, "enhanced_df", self.core_params)
-        FileSaver(bindingevent_info_df, "binding_event_info", self.core_params)
-        FileSaver(group_info_df, "group_info", self.core_params)
-        FileSaver(all_center, "all_center_photons", self.core_params)
-        t2 = time.time()
-        print("Time elapsed: ", np.round(t2-t1, 2), " seconds")
-        self.group_info_df = group_info_df
-        self.edge_photons = edge_photons
-        self.center_photons = center_photons
-        self.fulltable = fulltable
-        self.all_center = all_center
-
-    def SimplyImport(self, load_path):
-        self.group_info_df = pd.read_pickle(os.path.join(load_path, "group_info.pkl"))
-        enhanced_df = pd.read_pickle(os.path.join(load_path, "enhanced_df.pkl"))
-        self.all_center = pd.read_pickle(os.path.join(load_path, "all_center_photons.pkl"))
-        all_first, incorrect_all_center, all_last = AllPhotons(enhanced_df)
-        self.fulltable = pd.read_pickle(os.path.join(load_path, "unchanged_fulltable.pkl"))
-        self.edge_photons = np.concatenate([np.asarray(all_first["first_photons"]), np.asarray(all_last["last_photons"])])
-        self.center_photons = np.asarray(self.all_center["center_photons"])
-        
-    def Plots(self, plotting_params, save):
-        if self.core_params["number_sbs"]==1:
-            print("Percentage of sites destroyed:", SiteDestructionAnalysis(self.group_info_df, self.core_params, plotting_params["exp_fit_type"], save))
-        #Plot dark times
-        PlotAllKinetics(self.group_info_df, plotting_params["dark_range"], plotting_params["dark_cutoff"], "dark", plotting_params["dark_binwidth"], [self.core_params["plot_title"]+"\nDark times", "Dark times (s)", "Number of binding sites"], self.core_params, save)
-        #Plot bright times
-        PlotAllKinetics(self.group_info_df, plotting_params["bright_range"], plotting_params["bright_cutoff"], "bright", plotting_params["bright_binwidth"], [self.core_params["plot_title"]+"\nBright times", "Bright times (s)", "Number of binding sites"], self.core_params, save)
-        #Plot photon histogram
-        PhotoPlot(self.edge_photons, self.center_photons, self.core_params, NumberOfGroups(self.fulltable), plotting_params["bin_width_photons"], plotting_params["fit_style_photons"], plotting_params["PhotoPlot_fit_params"], plotting_params["x_factor_photons"], save)
-        #Plot localizations over time
-        LocPlot(self.fulltable, self.core_params, NumberOfGroups(self.fulltable), save)
-        #Plot background localizations over time
-        BackgroundOverTime(self.fulltable, self.core_params, plotting_params, save)
-        #Plot background
-        BackGroundPlot(self.fulltable, self.core_params, plotting_params["binwidth_bg"], plotting_params["plot_range_bg"], save)
-        #Plot signal to background ratio
-        PlotSBR(self.all_center, self.core_params, plotting_params["binwidth_sbr"], plotting_params["x_factor_sbr"], save)
-
-
-
