@@ -1,13 +1,16 @@
 # DNA-PAINT_analysis
- DNA-PAINT analysis
 
+Get performance metrics for your DNA-PAINT measurement. 
 
+Associated publication: 
+
+Please cite XXX if you use this software. 
 
 ## Requirements
 
 A python environment must be created, for instance with Anaconda. It must satisfy the following dependencies: 
 
-## Python Standard Library
+### Python Standard Library
 
 - python 3.9.7
 - itertools 
@@ -18,7 +21,7 @@ A python environment must be created, for instance with Anaconda. It must satisf
 - datetime
 - multiprocessing
 
-## Packages
+### Packages
 
 - numpy 1.21.2
 - scipy 1.7.1
