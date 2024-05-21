@@ -38,7 +38,7 @@ The software was tested on Mac OS 14.4.1
 
 ### Main.py
 
-<b>First, define a Measurement object with the following paramters: </b>
+<b>First, define a Measurement object with the following parameters: </b>
 
 - in_path: The path to the .hdf5 file containing your single binding sites (or picked NPCs) to be analyzed (string). The .hdf5 file must contain groups (i.e. be picked sites). 
 - save_path: The folder where you want your output to be saved (string).
@@ -49,7 +49,7 @@ MeasurementName.Begin() will perform the calculations.
 
 MeasurementName.FileSaver() will save the results. 
 
-<b>Next, define a Plotting object with the following paramters: </b>
+<b>Next, define a Plotting object with the following parameters: </b>
 
 - table_g: The table containing binding events, photon counts and SBR (calculated by MeasurementName.Begin()).
 - table_k: The table containing kinetics (bright times, dark times, mean bright and dark times, time from last frame to end of measurement and ratio of time from last frame to end of measurement over mean dark time, calculated by MeasurementName.Begin()).
