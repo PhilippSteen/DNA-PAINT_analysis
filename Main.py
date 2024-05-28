@@ -12,9 +12,9 @@ import time
 
 t1 = time.time()
 
-Test1 = Measurement(in_path="/.../eval/S2_Atto643_300pM_Tx_70mW_sbs.hdf5",
+Test1 = Measurement(in_path="/.../SBS.hdf5",
                     save_path = "/.../results",
-                    saving_name = "R1_Atto643_Tx",
+                    saving_name = "Sequence_Name_Buffer",
                     total_n_frames = 20000)
 Test1.Begin()
 Test1.FileSaver()
@@ -29,7 +29,7 @@ Test1b = Plotting(table_g = Test1.table_g,
                  show = False,
                  save = True,
                  save_path = "/.../results",
-                 saving_name = "R1_Atto643_Tx",
+                 saving_name = "Sequence_Name_Buffer",
                  total_n_frames = 20000)
 
 Test1b.Plot_photons()
