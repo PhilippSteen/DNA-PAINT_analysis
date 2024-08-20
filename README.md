@@ -5,7 +5,9 @@ Get performance metrics for your DNA-PAINT measurement.
 Associated publication: 
 
 Please cite 
-Steen, P.R., Unterauer, E.M., Masullo, L.A. et al. The DNA-PAINT palette: a comprehensive performance analysis of fluorescent dyes. Nat Methods (2024). https://doi.org/10.1038/s41592-024-02374-8 
+
+Steen, P.R., Unterauer, E.M., Masullo, L.A. *et al.* The DNA-PAINT palette: a comprehensive performance analysis of fluorescent dyes. *Nat Methods* (2024). https://doi.org/10.1038/s41592-024-02374-8 
+
 if you use this software. 
 
 ## Requirements
