@@ -112,7 +112,7 @@ class Plotting():
         n_mean_tb = len(self.table_k[self.table_k.mean_bright > 0]["mean_bright"])
         binwidth = mean_tb/20
         ax.hist(self.table_k[self.table_k.mean_bright > 0]["mean_bright"],bins=np.arange(min(self.table_k[self.table_k.mean_bright > 0]["mean_bright"]), max(self.table_k[self.table_k.mean_bright > 0]["mean_bright"]) + binwidth, binwidth), label = "Mean bright times")
-        ax.axvline(x=mean_tb, label=("Mean bright time = "+str(mean_tb)+"\nN binding events = "+str(n_mean_tb)))
+        ax.axvline(x=mean_tb, label=("Mean bright time = "+str(mean_tb)+"\nN picked sites = "+str(n_mean_tb)))
         ax.legend()
         ax.set_xlim(0,2*mean_tb)
         if self.save==True:
@@ -130,7 +130,7 @@ class Plotting():
         n_mean_td = len(self.table_k[self.table_k.mean_dark > 0]["mean_dark"])
         binwidth = mean_td/20
         ax.hist(self.table_k[self.table_k.mean_dark > 0]["mean_dark"],bins=np.arange(min(self.table_k[self.table_k.mean_dark > 0]["mean_dark"]), max(self.table_k[self.table_k.mean_dark > 0]["mean_dark"]) + binwidth, binwidth), label = "Mean dark times")
-        ax.axvline(x=mean_td, label=("Mean dark time = "+str(mean_td)+"\nN binding events = "+str(n_mean_td)))
+        ax.axvline(x=mean_td, label=("Mean dark time = "+str(mean_td)+"\nN picked sites = "+str(n_mean_td)))
         ax.legend()
         ax.set_xlim(0,2*mean_td)
         if self.save==True:
@@ -146,7 +146,7 @@ class Plotting():
         ax.set_title("Ratio r")
         n_r = len(self.table_k[self.table_k.r > 0]["r"])
         binwidth = .5
-        n, bins, patches = ax.hist(self.table_k[self.table_k.r > 0]["r"],bins=np.arange(min(self.table_k[self.table_k.r > 0]["r"]), max(self.table_k[self.table_k.r > 0]["r"]) + binwidth, binwidth), label = "r values\nN binding events = "+str(n_r))
+        n, bins, patches = ax.hist(self.table_k[self.table_k.r > 0]["r"],bins=np.arange(min(self.table_k[self.table_k.r > 0]["r"]), max(self.table_k[self.table_k.r > 0]["r"]) + binwidth, binwidth), label = "r values\nN picked sites = "+str(n_r))
         bin_middles = bins+(0.5*binwidth)
         xvals, yvals = bin_middles[:-1], n
         popt_exp, pcov_exp = curve_fit(self.exp_r, xvals, yvals, p0=[500,1])
