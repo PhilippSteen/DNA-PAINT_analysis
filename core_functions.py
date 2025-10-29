@@ -14,8 +14,6 @@ from operator import itemgetter
 from scipy.special import erf
 import math
 import os
-import multiprocessing
-from pandarallel import pandarallel
 
 class Measurement():
     def __init__(self,
@@ -35,11 +33,21 @@ class Measurement():
     def Begin(self):
         self.Import()
         self.cleaning_bg()
-        pandarallel.initialize(nb_workers=min(30, multiprocessing.cpu_count()))
-        self.table_g = self.table.groupby('group').parallel_apply(self.GroupCalcs)
-        self.table_k = self.table.groupby('group').parallel_apply(self.KineticsCalcs) #Table g contains photon and SBR information
-        self.table_k['mean_bright'] = self.table_k['bright_times'].parallel_apply(self.CDF_kinetics)
-        self.table_k['mean_dark'] = self.table_k['dark_times'].parallel_apply(self.CDF_kinetics)
+        try:
+            import multiprocessing
+            from pandarallel import pandarallel
+            pandarallel.initialize(nb_workers=min(30, multiprocessing.cpu_count()))
+            self.table_g = self.table.groupby('group').parallel_apply(self.GroupCalcs)
+            self.table_k = self.table.groupby('group').parallel_apply(self.KineticsCalcs) #Table g contains photon and SBR information
+            self.table_k['mean_bright'] = self.table_k['bright_times'].parallel_apply(self.CDF_kinetics)
+            self.table_k['mean_dark'] = self.table_k['dark_times'].parallel_apply(self.CDF_kinetics)
+        except Exception as e:
+            print(f"Parallel processing failed: {e}")
+            print("Using non-parallel approach.")
+            self.table_g = self.table.groupby('group').apply(self.GroupCalcs)
+            self.table_k = self.table.groupby('group').apply(self.KineticsCalcs)
+            self.table_k['mean_bright'] = self.table_k['bright_times'].apply(self.CDF_kinetics)
+            self.table_k['mean_dark'] = self.table_k['dark_times'].apply(self.CDF_kinetics)
         self.table_k["r"] = self.table_k['end_times']/self.table_k['mean_dark'] #Table k contains kinetics information
 
     def Import(self):
