@@ -119,7 +119,7 @@ class Measurement:
 ###############################################################################################
 
 t1 = time.time()
-crosshairs_path = "/.../S3_align_1/eval/S3_align_1_MMStack_Pos0.ome_locs_clustered.hdf5"
+crosshairs_path = "/Volumes/pool-miblab1/users/steen/00_imaging/collabs/26_01_16_Cy3_Cy5_COT/align_R1_100pM_R3_100pM_adTx_1/aligma/rough_pentamer_picks_clustered.hdf5"
 five = Measurement(path = crosshairs_path)
 five.Import()
 five.CountSiteNumber()

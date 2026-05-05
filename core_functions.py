@@ -113,7 +113,7 @@ class Measurement():
     def KineticsCalcs(self, group_df):
         """Finds consecutive binding events."""
         events, bright_times, dark_times, end_times = self.BindingEvents(np.asarray(group_df["frame"]))
-        return(pd.Series(data=(bright_times,dark_times, end_times),index=["bright_times","dark_times","end_times"]))
+        return(pd.Series(data=(events,bright_times,dark_times, end_times),index=["events","bright_times","dark_times","end_times"]))
 
     def cleaning_bg(self):
         """If Picasso Localize has a fitting error, the background value may be negative. This should be removed."""
@@ -121,8 +121,8 @@ class Measurement():
     
     def FileSaver(self):
         """Saves the dataframes for later use"""
-        self.table_g.to_csv(os.path.join(self.save_path, "table_g_"+self.saving_name+".csv"), index = True)
+        #self.table_g.to_csv(os.path.join(self.save_path, "table_g_"+self.saving_name+".csv"), index = True)
         self.table_g.to_pickle(os.path.join(self.save_path, "table_g_"+self.saving_name+".pkl"))
-        self.table_k.to_csv(os.path.join(self.save_path, "table_k_"+self.saving_name+".csv"), index = True)
+        #self.table_k.to_csv(os.path.join(self.save_path, "table_k_"+self.saving_name+".csv"), index = True)
         self.table_k.to_pickle(os.path.join(self.save_path, "table_k_"+self.saving_name+".pkl"))
         return()

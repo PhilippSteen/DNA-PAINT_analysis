@@ -12,10 +12,15 @@ import time
 
 t1 = time.time()
 
-Test1 = Measurement(in_path="/.../SBS.hdf5",
-                    save_path = "/.../results",
-                    saving_name = "Sequence_Name_Buffer",
-                    total_n_frames = 20000)
+Test1 = Measurement(in_path="/Volumes/pool-miblab1/users/kellerer/z_raw/260422_NUP_DyeAnalysis/R1_Cy5_NDA_100pM_40mW_2/dye_a/R1_Cy5_NDA_100pM_40mW_2_MMStack_Pos0.ome_locs_render_NPC-picks.hdf5",
+                    save_path="/Volumes/pool-miblab1/users/kellerer/z_raw/260422_NUP_DyeAnalysis/R1_Cy5_NDA_100pM_40mW_2/dye_a/eval",
+                    saving_name="R1_Cy5_NDA_ppt_100pM",
+                    total_n_frames = 80000)
+
+#Test1 = Measurement(in_path="/.../SBS.hdf5",
+#                    save_path = "/.../results",
+#                    saving_name = "Sequence_Name_Buffer",
+#                    total_n_frames = 20000)
 Test1.Begin()
 Test1.FileSaver()
 
@@ -28,9 +33,9 @@ Test1b = Plotting(table_g = Test1.table_g,
                  table_k = Test1.table_k,
                  show = False,
                  save = True,
-                 save_path = "/.../results",
-                 saving_name = "Sequence_Name_Buffer",
-                 total_n_frames = 20000)
+                 save_path = "/Volumes/pool-miblab1/users/kellerer/z_raw/260422_NUP_DyeAnalysis/R1_Cy5_NDA_100pM_40mW_2/dye_a/eval",
+                 saving_name = "R1_Cy5_NDA_ppt_100pM",
+                 total_n_frames = 80000)
 
 Test1b.Plot_photons()
 Test1b.Plot_bg()
@@ -41,5 +46,3 @@ Test1b.Plot_r()
 Test1b.Plot_locs()
 Test1b.SaveAllResults()
 
-t4 = time.time()
-print("Time elapsed during plotting / evaluation (incl. file saving): ", np.round(t4-t3, 2), " seconds")

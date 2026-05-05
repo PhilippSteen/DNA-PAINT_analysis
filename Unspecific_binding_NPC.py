@@ -3,7 +3,7 @@
 #########             Jungmann Lab             #########
 ######### Max Planck Institute of Biochemistry #########
 #########     Ludwig Maximilian University     #########
-#########                 2024                 #########
+#########              2024-2026               #########
 ########################################################
 
 import math
@@ -19,11 +19,13 @@ def Import(input_path):
         data = yaml.safe_load_all(f)
         for x in data:
             try: 
-                pick_diameter = x.get('Pick Diameter')
+                #pick_diameter = x.get('Pick Diameter')
+                pick_area = x.get('Area (um^2)')
             except:
                 continue
-    return(fulltable, pick_diameter)
+    return(fulltable, pick_area) #return(fulltable, pick_diameter)
 
+'''
 def LocsPerSquareMicrometer(table, diameter, pixelsize = 0.13):
     """
     Calculates number of localizations per square micrometer.
@@ -47,6 +49,10 @@ def LocsPerSquareMicrometer(table, diameter, pixelsize = 0.13):
 
     number_of_picks = table["group"].nunique()
     area = (math.pi * ( (0.5*diameter) * (pixelsize) )**2)*number_of_picks
+    locs = len(table.index)
+    return(locs/area)
+'''
+def LocsPerSquareMicrometer(table, area):
     locs = len(table.index)
     return(locs/area)
 
@@ -79,8 +85,14 @@ def SBR_comparison(nup_cy3b, cyt_cy3b, nup_doi, cyt_doi, destination):
 ###############################################################################################
 ###############################################################################################
 
-SBR_comparison("/.../C3_Cy3b_100pM_adTx_20mW_NUP-PICKS.hdf5",
-               "/.../C3_Cy3b_100pM_adTx_20mW_CYTOPLASM-PICKS.hdf5",
-               "/.../C3_JF585_100pM_Tx_20mW_NUP-PICKS.hdf5",
-               "/.../C3_JF585_100pM_Tx_20mW_CYTOPLASM-PICKS.hdf5",
-               destination = "/.../C3_JF585_100pM_Tx_20mW_1/eval")
+SBR_comparison("/Volumes/pool-miblab1/users/kellerer/z_raw/260422_NUP_DyeAnalysis/R1_Atto643_100pM_40mW_1/dye_a/R1_Atto643_100pM_40mW_1_MMStack_Pos0.ome_locs_undrifted_NPC-picks.hdf5",
+               "/Volumes/pool-miblab1/users/kellerer/z_raw/260422_NUP_DyeAnalysis/R1_Atto643_100pM_40mW_1/dye_a/R1_Atto643_100pM_40mW_1_MMStack_Pos0.ome_locs_undrifted_cytoplasm_picks.hdf5",
+               "/Volumes/pool-miblab1/users/kellerer/z_raw/260422_NUP_DyeAnalysis/R1_Cy5_NDA_100pM_40mW_2/dye_a/R1_Cy5_NDA_100pM_40mW_2_MMStack_Pos0.ome_locs_render_NPC-picks.hdf5",
+               "/Volumes/pool-miblab1/users/kellerer/z_raw/260422_NUP_DyeAnalysis/R1_Cy5_NDA_100pM_40mW_2/dye_a/R1_Cy5_NDA_100pM_40mW_2_MMStack_Pos0.ome_locs_render_cytoplasm_picks.hdf5",
+               destination="/Volumes/pool-miblab1/users/kellerer/z_raw/260422_NUP_DyeAnalysis/R1_Cy5_NDA_100pM_40mW_2/dye_a/eval")
+
+#SBR_comparison("/.../C3_Cy3b_100pM_adTx_20mW_NUP-PICKS.hdf5",
+#               "/.../C3_Cy3b_100pM_adTx_20mW_CYTOPLASM-PICKS.hdf5",
+#               "/.../C3_JF585_100pM_Tx_20mW_NUP-PICKS.hdf5",
+#               "/.../C3_JF585_100pM_Tx_20mW_CYTOPLASM-PICKS.hdf5",
+#               destination = "/.../C3_JF585_100pM_Tx_20mW_1/eval")
